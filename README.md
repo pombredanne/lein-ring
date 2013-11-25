@@ -15,11 +15,11 @@ Ring handler into a standard war file.
 To use Lein-Ring, add it as a plugin to your `project.clj` file or
 your global profile:
 
-    :plugins [[lein-ring "0.7.5"]]
+    :plugins [[lein-ring "0.8.8"]]
 
 Or, if you are using a version of Leiningen prior to 1.7.0:
 
-    :dev-dependencies [[lein-ring "0.7.5"]]
+    :dev-dependencies [[lein-ring "0.8.8"]]
 
 Then add a new `:ring` key to your `project.clj` file that contains a
 map of configuration options. At minimum there must be a `:handler`
@@ -101,16 +101,37 @@ The following options affect the behavior of the web server started by
   If true, automatically reload modified source files. Defaults to
   true in development mode, false in production.
 
+* `:reload-paths` -
+  A collection of directory paths that can trigger a reload. By
+  default this takes all directories in the project classpath.
+
 * `:auto-refresh?` -
   If true, automatically refresh the browser when source or resource
   files are modified. Defaults to false.
+
+* `:nrepl` - 
+  A map of `:start?` and (optionally) `:port` keys. If `:start?` is true, 
+  open up an nREPL server on the given port. `:start?` defaults to false, 
+  `:port` defaults to an arbitrary free port.
+
+## Executable jar files
+
+Lein-Ring can generate executable jar files for deployment purposes:
+
+    lein ring uberjar
+
+This generates a jar file with all dependencies. You can then copy the
+file to your web server and execute it with:
+
+    java -jar <project>-<version>-standalone.jar
 
 
 ## War files
 
 ### Compiling
 
-This next command will generate a war file from your handler:
+Lein-Ring can generate war files that can be loaded onto legacy Java
+web services such as Apache Tomcat:
 
     lein ring war
 
@@ -160,12 +181,16 @@ and are optional values. If not supplied, default values will be used instead.
 A war file can also include additional resource files, such as images or
 stylesheets. These should be placed in the directory specified by the
 Leiningen `:resources-path` key, which defaults to "resources". These
-resources will be placed on the classpath.
+resources will be placed on the classpath. To include multiple directories,
+use the Leiningen `:resource-paths` key, which should be a vector. The
+values in `:resources-path` and `:resource-paths` will be concatenated.
 
 However, there is another sort of resource, one accessed through the
 `ServletContext` object. These resources are usually not on the classpath,
 and are instead placed in the root of the war file. If you happen to need this
 functionality, you can place your files in the directory specified by the
-`:war-resources-path` key, which defaules to "war-resources". It's recommended
-that you only use WAR resources for compatibility with legacy Java interfaces;
-under most circumstances, you should use the normal `:resources-path` instead.
+`:war-resources-path` key, which defaults to "war-resources". (As with
+normal resources, here you can use `:war-resource-paths` to include multiple
+directories.) It's recommended that you only use WAR resources for
+compatibility with legacy Java interfaces; under most circumstances, you
+should use the normal `:resources-path` instead.

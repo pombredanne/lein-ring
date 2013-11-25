@@ -2,6 +2,7 @@
   (:require [leiningen.compile :as compile]
             [clojure.java.io :as io]
             [clojure.string :as string]
+            [leinjacker.utils :as lju]
             [leinjacker.deps :as deps])
   (:use [clojure.data.xml :only [sexp-as-element indent-str]]
         leiningen.ring.util)
@@ -115,10 +116,11 @@
 (defn generate-handler [project handler-sym]
   (if (get-in project [:ring :servlet-path-info?] true)
     `(fn [request#]
-       (~handler-sym
-         (assoc request#
-           :path-info (.getPathInfo (:servlet-request request#))
-           :context   (.getContextPath (:servlet-request request#)))))
+       (let [context# ^String (.getContextPath (:servlet-request request#))]
+         (~handler-sym
+          (assoc request#
+            :context context#
+            :path-info (subs (:uri request#) (.length context#))))))
     handler-sym))
 
 (defn compile-servlet [project]
@@ -180,8 +182,9 @@
     (let [war-path (in-war-path war-root dir-path file)]
       (file-entry war project war-path file))))
 
-(defn war-resources-path [project]
-  (:war-resources-path project "war-resources"))
+(defn war-resources-paths [project]
+  (filter identity
+    (distinct (concat [(:war-resources-path project "war-resources")] (:war-resource-paths project)))))
 
 (defn write-war [project war-path]
   (with-open [war-stream (create-war project war-path)]
@@ -192,11 +195,18 @@
                                    [(:resources-path project)] (:resource-paths project)))
             :when path]
       (dir-entry war-stream project "WEB-INF/classes/" path))
-    (dir-entry war-stream project "" (war-resources-path project))
+    (doseq [path (war-resources-paths project)]
+      (dir-entry war-stream project "" path))
     war-stream))
 
+(defn unmerge-profiles [project]
+  (if-let [unmerge-fn (and (= 2 (lju/lein-generation))
+                           (lju/try-resolve 'leiningen.core.project/unmerge-profiles))]
+    (unmerge-fn project [:default])
+    project))
+        
 (defn add-servlet-dep [project]
-  (deps/add-if-missing project '[ring/ring-servlet "1.1.6"]))
+  (deps/add-if-missing project '[ring/ring-servlet "1.2.1"]))
 
 (defn war
   "Create a $PROJECT-$VERSION.war file."
@@ -204,7 +214,9 @@
      (war project (default-war-name project)))
   ([project war-name]
      (ensure-handler-set! project)
-     (let [project (add-servlet-dep project)
+      (let [project (-> project
+                        add-servlet-dep
+                        unmerge-profiles)
            result  (compile/compile project)]
        (when-not (and (number? result) (pos? result))
          (let [war-path (war-file-path project war-name)]
